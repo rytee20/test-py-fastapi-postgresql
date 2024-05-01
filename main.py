@@ -1,11 +1,13 @@
-from fastapi import FastAPI, HTTPException, Depends
+from enum import Enum
+from fastapi import Body, FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Annotated
 import models
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
 from fastapi.responses import JSONResponse
-import datetime
+from datetime import datetime
+from fastapi import Path
 
 app=FastAPI()
 models.Base.metadata.create_all(bind=engine)
@@ -26,6 +28,12 @@ class UsersAchievementsBase(BaseModel):
     id_user: List[UsersBase]
     id_achievement: List[AchievementsBase]
     date: datetime
+    class Config:
+        arbitrary_types_allowed = True
+
+class Language(str, Enum):
+    ru = "ru"
+    en = "en"
 
 def get_db():
     db=SessionLocal()
@@ -51,22 +59,22 @@ async def get_all_achievements(db: db_dependency):
     return result
 
 @app.post("/users_achievements/achievements/create")
-async def create_achievement(achievement:AchievementsBase, db:db_dependency):
-    db_achievement=models.Achievements(achievement_name=achievement.achievement_name, scores=achievement.scores, description=achievement.description)
+async def create_achievement(achievement_name:str, scores:int, description:str, db:db_dependency):
+    db_achievement=models.Achievements(achievement_name=achievement_name, scores=scores, description=description)
     db.add(db_achievement)
     db.commit()
     db.refresh(db_achievement)
 
 @app.post("/users_achievements/users/create")
-async def create_user(user:UsersBase, db:db_dependency):
-    db_user=models.Users(username=user.username, language=user.language)
+async def create_user(db: db_dependency, username: str, language: Language = Path(..., title="The language of the user", description="Choose the language of the user", example="ru")):
+    db_user = models.Users(username=username, language=language.value)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
 
 @app.post("/users_achievements/set_achievement")
-async def set_achievements(u_a:UsersAchievementsBase, db:db_dependency):
-    db_u_a=models.Users(id_user=u_a.id_user, id_achievement=u_a.id_achievement, date=datetime.now())
+async def set_achievement(id_user:int, id_achievement:int, db:db_dependency):
+    db_u_a=models.Users_Achievements(id_user=id_user, id_achievement=id_achievement)
     db.add(db_u_a)
     db.commit()
     db.refresh(db_u_a)

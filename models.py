@@ -1,5 +1,6 @@
-from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from database import Base
+from datetime import datetime
 
 class Users(Base):
     __tablename__='users'
@@ -22,4 +23,4 @@ class Users_Achievements(Base):
     id=Column(Integer, primary_key=True, index=True)
     id_user=Column(Integer, ForeignKey("users.id_user"))
     id_achievement=Column(Integer, ForeignKey("achievements.id_achievement"))
-    date=Column(DateTime, index=True)
+    date=Column(DateTime, default=datetime.now())
