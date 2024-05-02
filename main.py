@@ -6,13 +6,11 @@ import models
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
 from datetime import datetime
-from googletrans import Translator
 from mtranslate import translate as mtranslate
+from sqlalchemy import func
 
 app=FastAPI()
 models.Base.metadata.create_all(bind=engine)
-
-translator = Translator()
 
 class UsersBase(BaseModel):
     id_user: int
@@ -30,8 +28,6 @@ class UsersAchievementsBase(BaseModel):
     id_user: List[UsersBase]
     id_achievement: List[AchievementsBase]
     date: datetime
-    class Config:
-        arbitrary_types_allowed = True
 
 class Language(str, Enum):
     ru = "ru"
@@ -80,6 +76,114 @@ async def get_users_achievements(id_user: int, db: db_dependency):
         translated_achievements.append(translated_achievement)
 
     return translated_achievements
+
+@app.get("/users_achievements/users_with_max_achievements")
+async def get_users_with_max_achievements(db: db_dependency):
+    user_achievements_count = db.query(models.Users_Achievements.id_user, func.count().label("achievements_count")).group_by(models.Users_Achievements.id_user).subquery()
+
+    max_achievements_count = db.query(
+        func.max(user_achievements_count.c.achievements_count)).scalar()
+
+    users_with_max_achievements = db.query(models.Users).join(user_achievements_count, models.Users.id_user == user_achievements_count.c.id_user).filter(user_achievements_count.c.achievements_count == max_achievements_count).all()
+
+    if not users_with_max_achievements:
+        raise HTTPException (status_code=404,detail='Users is not found')
+
+    result = []
+    for user in users_with_max_achievements:
+        r = {
+            "id_user": user.id_user,
+            "username": user.username,
+            "count_achievements": max_achievements_count
+        }
+        result.append(r)
+
+    return result
+
+@app.get("/users_achievements/users_with_max_scores")
+async def get_users_with_max_scores(db: db_dependency):
+    user_scores = (
+        db.query(
+            models.Users_Achievements.id_user,
+            func.sum(models.Achievements.scores).label("total_scores")
+        )
+        .join(models.Achievements, models.Users_Achievements.id_achievement == models.Achievements.id_achievement)
+        .group_by(models.Users_Achievements.id_user)
+        .subquery()
+    )
+
+    max_scores = db.query(func.max(user_scores.c.total_scores)).scalar()
+
+    users_with_max_scors = db.query(models.Users).join(user_scores, models.Users.id_user == user_scores.c.id_user).filter(user_scores.c.total_scores == max_scores).all()
+
+    if not users_with_max_scors:
+        raise HTTPException (status_code=404,detail='Users is not found')
+    
+    result = []
+    for user in users_with_max_scors:
+        r = {
+            "id_user": user.id_user,
+            "username": user.username,
+            "total_scores": max_scores
+        }
+        result.append(r)
+    
+    return result
+
+@app.get("/users_achievements/users_with_max_difference")
+async def get_users_with_max_difference(db: db_dependency):
+    max_scores=db.query(func.sum(models.Achievements.scores)).scalar()
+
+    user_scores = (
+        db.query(
+            models.Users_Achievements.id_user,
+            func.sum(models.Achievements.scores).label("total_scores"),
+            (max_scores-func.sum(models.Achievements.scores)).label("difference")
+        )
+        .join(models.Achievements, models.Users_Achievements.id_achievement == models.Achievements.id_achievement)
+        .group_by(models.Users_Achievements.id_user)
+        .subquery()
+    )
+
+    max_difference=db.query(func.max(user_scores.c.difference)).scalar()
+
+    users_with_max_diff=(
+        db.query(user_scores.c.id_user, user_scores.c.total_scores, user_scores.c.difference)
+        .filter(user_scores.c.difference==max_difference)
+        .all())
+
+    result = [{"id_user": user_id, "total_scores": total_scores, "difference": difference} 
+              for user_id, total_scores, difference in users_with_max_diff]
+
+    return result
+
+@app.get("/users_achievements/users_with_min_difference")
+async def get_users_with_min_difference(db: db_dependency):
+    max_scores=db.query(func.sum(models.Achievements.scores)).scalar()
+
+    user_scores = (
+        db.query(
+            models.Users_Achievements.id_user,
+            func.sum(models.Achievements.scores).label("total_scores"),
+            (max_scores-func.sum(models.Achievements.scores)).label("difference")
+        )
+        .join(models.Achievements, models.Users_Achievements.id_achievement == models.Achievements.id_achievement)
+        .group_by(models.Users_Achievements.id_user)
+        .subquery()
+    )
+
+    min_difference=db.query(func.min(user_scores.c.difference)).scalar()
+
+    users_with_max_diff=(
+        db.query(user_scores.c.id_user, user_scores.c.total_scores, user_scores.c.difference)
+        .filter(user_scores.c.difference==min_difference)
+        .all())
+
+    result = [{"id_user": user_id, "total_scores": total_scores, "difference": difference} 
+              for user_id, total_scores, difference in users_with_max_diff]
+
+    return result
+
 
 @app.post("/users_achievements/achievements/create")
 async def create_achievement(achievement_name:str, scores:int, description:str, db:db_dependency):
