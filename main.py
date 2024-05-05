@@ -5,9 +5,10 @@ from typing import List, Annotated
 import models
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta
 from mtranslate import translate as mtranslate
 from sqlalchemy import func
+from sqlalchemy import case
 
 app=FastAPI()
 models.Base.metadata.create_all(bind=engine)
@@ -148,12 +149,16 @@ async def get_users_with_max_difference(db: db_dependency):
     max_difference=db.query(func.max(user_scores.c.difference)).scalar()
 
     users_with_max_diff=(
-        db.query(user_scores.c.id_user, user_scores.c.total_scores, user_scores.c.difference)
+        db.query(user_scores.c.id_user, models.Users.username, user_scores.c.total_scores, user_scores.c.difference)
+        .filter(models.Users.id_user==user_scores.c.id_user)
         .filter(user_scores.c.difference==max_difference)
         .all())
+    
+    if not users_with_max_diff:
+        raise HTTPException (status_code=404,detail='Users is not found')
 
-    result = [{"id_user": user_id, "total_scores": total_scores, "difference": difference} 
-              for user_id, total_scores, difference in users_with_max_diff]
+    result = [{"id_user": id_user,  "username": username, "total_scores": total_scores, "difference": difference} 
+              for id_user, username, total_scores, difference in users_with_max_diff]
 
     return result
 
@@ -175,12 +180,80 @@ async def get_users_with_min_difference(db: db_dependency):
     min_difference=db.query(func.min(user_scores.c.difference)).scalar()
 
     users_with_max_diff=(
-        db.query(user_scores.c.id_user, user_scores.c.total_scores, user_scores.c.difference)
+        db.query(user_scores.c.id_user, models.Users.username, user_scores.c.total_scores, user_scores.c.difference)
+        .filter(models.Users.id_user==user_scores.c.id_user)
         .filter(user_scores.c.difference==min_difference)
         .all())
+    
+    if not users_with_max_diff:
+        raise HTTPException (status_code=404,detail='Users is not found')
 
-    result = [{"id_user": user_id, "total_scores": total_scores, "difference": difference} 
-              for user_id, total_scores, difference in users_with_max_diff]
+    result = [{"id_user": id_user, "username": username, "total_scores": total_scores, "difference": difference} 
+              for id_user, username, total_scores, difference in users_with_max_diff]
+
+    return result
+
+@app.get("/users_achievements/users_with_7days_achievements")
+async def get_users_with_7days_achievements(db: db_dependency):
+
+    today_date = datetime.now()
+
+    get_users_count_achievements = (
+        db.query(
+            models.Users_Achievements.id_user,
+            func.date(models.Users_Achievements.date).label("date")
+        )
+        .filter(models.Users_Achievements.date >= today_date - timedelta(days=6))
+        .filter(models.Users_Achievements.date <= today_date)
+        .subquery()
+    )
+
+    get_users_count_7days_achievements = (
+        db.query(
+            get_users_count_achievements.c.id_user,
+            func.sum(case((func.date(get_users_count_achievements.c.date) == func.date(today_date - timedelta(days=6)), 1),else_ =0)).label("day1"),
+            func.sum(case((func.date(get_users_count_achievements.c.date) == func.date(today_date - timedelta(days=5)), 1),else_ =0)).label("day2"),
+            func.sum(case((func.date(get_users_count_achievements.c.date) == func.date(today_date - timedelta(days=4)), 1),else_ =0)).label("day3"),
+            func.sum(case((func.date(get_users_count_achievements.c.date) == func.date(today_date - timedelta(days=3)), 1),else_ =0)).label("day4"),
+            func.sum(case((func.date(get_users_count_achievements.c.date) == func.date(today_date - timedelta(days=2)), 1),else_ =0)).label("day5"),
+            func.sum(case((func.date(get_users_count_achievements.c.date) == func.date(today_date - timedelta(days=1)), 1),else_ =0)).label("day6"),
+            func.sum(case((func.date(get_users_count_achievements.c.date) == func.date(today_date), 1),else_ =0)).label("day7"),
+        )
+        .group_by(get_users_count_achievements.c.id_user)
+        .subquery()
+    )
+
+    get_users_with_7days_achievements = (
+        db.query(
+            get_users_count_7days_achievements.c.id_user,
+            func.sum(case((get_users_count_7days_achievements.c.day1 != 0 and
+                        get_users_count_7days_achievements.c.day2 != 0 and
+                        get_users_count_7days_achievements.c.day3 != 0 and
+                        get_users_count_7days_achievements.c.day4 != 0 and
+                        get_users_count_7days_achievements.c.day5 != 0 and
+                        get_users_count_7days_achievements.c.day6 != 0 and
+                        get_users_count_7days_achievements.c.day7 != 0, 1), else_=0)
+            ).label("achievements_in_sequence")
+        )
+        .group_by(get_users_count_7days_achievements.c.id_user)
+        .subquery()
+    )
+
+    users = (
+        db.query(
+            get_users_with_7days_achievements.c.id_user,
+            models.Users.username
+        )
+        .filter(get_users_with_7days_achievements.c.id_user==models.Users.id_user)
+        .filter(get_users_with_7days_achievements.c.achievements_in_sequence!=0)
+        .all()
+    )
+
+    if not users:
+        raise HTTPException (status_code=404,detail='Users is not found')
+
+    result = [{"id_user": id_user, "username": username} 
+            for id_user, username in users]
 
     return result
 
