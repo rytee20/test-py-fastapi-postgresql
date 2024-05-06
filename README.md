@@ -2,6 +2,8 @@
 
 Тестовое задание [здесь](https://github.com/rytee20/test-py-fastapi-postgresql/blob/main/тестовое_сов_07_03_24.pdf)
 
+Скрипты для создания бд users_achievements [здесь](https://github.com/rytee20/test-py-fastapi-postgresql/tree/main/scripts). Сначала запустить create_database, потом insert_users_achievements.
+
 Таблицы:
 -----------
 
