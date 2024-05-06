@@ -1,7 +1,7 @@
 from enum import Enum
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import List, Annotated
+from typing import List
 import models
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
@@ -33,9 +33,10 @@ class UsersAchievementsBase(BaseModel):
     id_achievement: List[AchievementsBase]  # Идентификатор достижения
     date: datetime                          # Дата выдачи
 
+# Предоставление поддерживаемых языков
 class Language(str, Enum):
-    ru = "ru"
-    en = "en"
+    ru = "ru" # Русский язык
+    en = "en" # Английский язык
 
 def get_db():
     db=SessionLocal()
@@ -55,7 +56,7 @@ async def get_user(id_user: int, db: Session = Depends(get_db)):
     return result
 
 # Предоставление данных о всех возможных достижениях
-@app.get("/users_achievements/achievements", response_model=List[AchievementsBase])
+@app.get("/users_achievements/achievements")
 async def get_all_achievements(db: Session = Depends(get_db)):
     result = db.query(models.Achievements).all()
 
@@ -222,6 +223,7 @@ async def get_users_with_min_difference(db: Session = Depends(get_db)):
               for id_user, username, total_scores, difference in users_with_max_diff]
 
     return result
+
 # Предоставление данных о пользователях, которые за последние 7 дней каждый день получали хотя бы одно достижение
 @app.get("/users_achievements/users_with_7days_achievements")
 async def get_users_with_7days_achievements(db: Session = Depends(get_db)):
@@ -255,14 +257,15 @@ async def get_users_with_7days_achievements(db: Session = Depends(get_db)):
     get_users_with_7days_achievements = (
         db.query(
             get_users_count_7days_achievements.c.id_user,
-            func.sum(case((get_users_count_7days_achievements.c.day1 != 0 and
-                        get_users_count_7days_achievements.c.day2 != 0 and
-                        get_users_count_7days_achievements.c.day3 != 0 and
-                        get_users_count_7days_achievements.c.day4 != 0 and
-                        get_users_count_7days_achievements.c.day5 != 0 and
-                        get_users_count_7days_achievements.c.day6 != 0 and
-                        get_users_count_7days_achievements.c.day7 != 0, 1), else_=0))
-                        .label("achievements_in_sequence"))
+            func.count(case((
+                get_users_count_7days_achievements.c.day1 != 0 and
+                get_users_count_7days_achievements.c.day2 != 0 and
+                get_users_count_7days_achievements.c.day3 != 0 and
+                get_users_count_7days_achievements.c.day4 != 0 and
+                get_users_count_7days_achievements.c.day5 != 0 and
+                get_users_count_7days_achievements.c.day6 != 0 and
+                get_users_count_7days_achievements.c.day7 != 0, 1), else_=0))
+        .label("achievements_in_sequence"))
         .group_by(get_users_count_7days_achievements.c.id_user)
         .subquery())
 
