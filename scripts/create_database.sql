@@ -10,7 +10,7 @@ CREATE TABLE users(
 
 CREATE TABLE achievements(
     id_achievement SERIAL PRIMARY KEY,
-    achievement_name VARCHAR(20) NOT NULL,
+    achievement_name VARCHAR(40) NOT NULL,
     scores INTEGER NOT NULL,
 	description VARCHAR(100) NOT NULL
 );
@@ -19,6 +19,8 @@ CREATE TABLE users_and_their_achievements(
     id SERIAL PRIMARY KEY,
     id_user INTEGER NOT NULL,
     id_achievement INTEGER NOT NULL,
-	date DATE NOT NULL DEFAULT (CURRENT_DATE),
-	UNIQUE (id_user, id_achievement)
+    date DATE NOT NULL DEFAULT (CURRENT_DATE),
+    UNIQUE (id_user, id_achievement),
+    FOREIGN KEY (id_user) REFERENCES users (id_user),
+    FOREIGN KEY (id_achievement) REFERENCES achievements (id_achievement)
 );
