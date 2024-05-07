@@ -235,7 +235,7 @@ async def get_users_with_7days_achievements(db: Session = Depends(get_db)):
         db.query(
             models.Users_Achievements.id_user,
             func.date(models.Users_Achievements.date).label("date"))
-        .filter(models.Users_Achievements.date >= today_date - timedelta(days=6))
+        .filter(models.Users_Achievements.date >= today_date - timedelta(days=7))
         .filter(models.Users_Achievements.date <= today_date)
         .subquery())
 
@@ -250,39 +250,23 @@ async def get_users_with_7days_achievements(db: Session = Depends(get_db)):
             func.sum(case((func.date(get_users_date_achievements.c.date) == func.date(today_date - timedelta(days=2)), 1),else_ =0)).label("day5"),
             func.sum(case((func.date(get_users_date_achievements.c.date) == func.date(today_date - timedelta(days=1)), 1),else_ =0)).label("day6"),
             func.sum(case((func.date(get_users_date_achievements.c.date) == func.date(today_date), 1),else_ =0)).label("day7"),)
+        
         .group_by(get_users_date_achievements.c.id_user)
-        .subquery())
-
-    # Пользователи, получившие за каждый день хотя бы одно достижение
-    get_users_with_7days_achievements = (
-        db.query(
-            get_users_count_7days_achievements.c.id_user,
-            func.count(case((
-                get_users_count_7days_achievements.c.day1 != 0 and
-                get_users_count_7days_achievements.c.day2 != 0 and
-                get_users_count_7days_achievements.c.day3 != 0 and
-                get_users_count_7days_achievements.c.day4 != 0 and
-                get_users_count_7days_achievements.c.day5 != 0 and
-                get_users_count_7days_achievements.c.day6 != 0 and
-                get_users_count_7days_achievements.c.day7 != 0, 1), else_=0))
-        .label("achievements_in_sequence"))
-        .group_by(get_users_count_7days_achievements.c.id_user)
-        .subquery())
-
-    # Результат (is_user и username)
-    users = (
-        db.query(
-            get_users_with_7days_achievements.c.id_user,
-            models.Users.username)
-        .filter(get_users_with_7days_achievements.c.id_user==models.Users.id_user)
-        .filter(get_users_with_7days_achievements.c.achievements_in_sequence!=0)
         .all())
+    
+    get_users_count_7days_achievements_list = [{"id_user": id_user, "day1": day1, "day2": day2, "day3": day3, "day4": day4, "day5": day5, "day6": day6, "day7": day7} 
+            for id_user, day1, day2, day3, day4, day5, day6, day7 in get_users_count_7days_achievements]
+    
+    result = []
+    for user in get_users_count_7days_achievements_list:
+        if(user.get("day1")!=0 and user.get("day2")!=0 and user.get("day3")!=0 and user.get("day4")!=0 and user.get("day5")!=0 and user.get("day6")!=0 and user.get("day7")!=0):
+            r = {
+                "id_user": user.get("id_user")
+            }
+            result.append(r)
 
-    if not users:
+    if not result:
         raise HTTPException (status_code=404,detail='Users is not found')
-
-    result = [{"id_user": id_user, "username": username} 
-            for id_user, username in users]
 
     return result
 
